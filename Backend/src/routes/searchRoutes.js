@@ -4,7 +4,7 @@ import { searchEmails } from '../services/searchService.js';
 const router = express.Router();
 
 // API Endpoint: Search Emails
-router.get('/search', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { query } = req.query;
     if (!query) {

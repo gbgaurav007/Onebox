@@ -1,76 +1,87 @@
-import client from '../config/elasticsearchConfig.js';
+import { Client } from '@elastic/elasticsearch';
+import dotenv from 'dotenv';
+
+const esClient = new Client({
+  node: process.env.ELASTICSEARCH_URL || 'http://127.0.0.1:9200',
+  auth: {
+    username: 'elastic',
+    password: 'changeme' // Only if you enabled security
+  },
+  tls: {
+    rejectUnauthorized: false // For development only
+  }
+});
+
+let bulkQueue = []; // For batch indexing
 
 export async function createEmailIndex() {
-  try {
-    console.log('🔍 Checking if Elasticsearch index exists...');
-
-    // Fetch index details instead of using indices.exists()
-    let exists;
     try {
-      const response = await client.indices.get({ index: 'emails' });
-      exists = !!response;
-    } catch (error) {
-      if (error.meta?.statusCode === 404) {
-        exists = false;
-      } else {
-        throw error; // Rethrow if it's not a "not found" error
-      }
-    }
+      console.log('🔍 Checking if Elasticsearch index exists...');
+  
+      const exists = await esClient.indices.exists({ index: 'emails' });
 
-    if (!exists) {
-      console.log('🔄 Creating Elasticsearch email index...');
-      await client.indices.create({
-        index: 'emails',
-        body: {
-          mappings: {
-            properties: {
-              subject: { type: 'text' },
-              from: { type: 'keyword' },
-              to: { type: 'keyword' },
-              date: { type: 'date' },
-              content: { type: 'text' },
+      if (!exists.body) {
+        console.log('🔄 Creating Elasticsearch email index...');
+        await esClient.indices.create({
+          index: 'emails',
+          body: {
+            settings: {
+              index: {
+                number_of_shards: 1,
+                number_of_replicas: 1,
+              },
+            },
+            mappings: {
+              properties: {
+                subject: { type: 'text' },
+                from: { type: 'keyword' },
+                to: { type: 'keyword' },
+                date: { type: 'date' },
+                content: { type: 'text' },
+                text: { type: 'text' },
+                html: { type: 'text' },
+                folder: { type: 'keyword' },
+              },
             },
           },
-        },
-      });
-      console.log('✅ Elasticsearch email index created.');
-    } else {
-      console.log('✅ Elasticsearch email index already exists.');
+        });
+        console.log('✅ Elasticsearch email index created.');
+      } else {
+        console.log('✅ Elasticsearch email index already exists.');
+      }
+    } catch (error) {
+      console.error('❌ Elasticsearch index creation error:', error.meta?.body?.error?.reason || error);
     }
-  } catch (error) {
-    console.error('❌ Elasticsearch index creation error:', JSON.stringify(error, null, 2));
   }
-}
 // Store an email in Elasticsearch
 export async function indexEmail(email) {
-  await client.index({
-    index: 'emails',
-    body: {
-        mappings: {
-          properties: {
-            subject: { type: 'text' },
-            from: { type: 'keyword' },
-            to: { type: 'keyword' },
-            date: { type: 'date' },
-            content: { type: 'text' },
-          },
-        },
-      },
+  try {
+    const response = await esClient.index({
+      index: 'emails',
+      body: email, // ✅ Corrected
     });
 
-  console.log(`📨 Indexed Email: ${email.subject}`);
+    console.log(`📨 Indexed Email: ${email.subject}`, response);
+  } catch (error) {
+    console.error('❌ Error indexing email:', error);
+  }
 }
 
 // Search emails in Elasticsearch
 export async function searchEmails(query) {
-  const result = await client.search({
-    index: 'emails',
-    body: {
-      query: {
-        match: { content: query },
+  try {
+    const result = await esClient.search({
+      index: 'emails',
+      body: {
+        query: {
+          match: { content: query },
+        },
       },
-    },
-  });
+    });
 
-  return result.body.hits.hits;
+    return result.body.hits.hits;
+  } catch (error) {
+    console.error('❌ Error searching emails:', error);
+    return [];
+  }
 }

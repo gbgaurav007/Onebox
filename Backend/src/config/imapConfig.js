@@ -9,7 +9,7 @@ export const imapAccounts = [
     port: process.env.IMAP_PORT_1,
     tls: true,
     tlsOptions: { rejectUnauthorized: false }, 
-    authTimeout: 3000,
+    authTimeout: 10000,
   },
   {
     user: process.env.IMAP_USER_2,
@@ -18,6 +18,6 @@ export const imapAccounts = [
     port: process.env.IMAP_PORT_2,
     tls: true,
     tlsOptions: { rejectUnauthorized: false },
-    authTimeout: 3000,
+    authTimeout: 10000,
   },
 ];

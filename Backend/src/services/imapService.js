@@ -31,7 +31,7 @@ async function fetchLatestEmails(connection) {
   const emails = await connection.search(searchCriteria, fetchOptions);
 
   for (const email of emails) {
-    const parsed = await parseEmail(email);
+    const parsed = await parseEmail(email.body);
     console.log(`📨 Processed Email: ${parsed.subject}`);
   }
 }
