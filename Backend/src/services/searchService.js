@@ -41,6 +41,12 @@ export async function createEmailIndex() {
                 text: { type: 'text' },
                 html: { type: 'text' },
                 folder: { type: 'keyword' },
+                category: {
+                    type: 'keyword',
+                    fields: {
+                      analyzed: { type: 'text' }
+                    }
+                  }
               },
             },
           },
@@ -57,8 +63,12 @@ export async function createEmailIndex() {
 // Store an email in Elasticsearch
 export async function indexEmail(email) {
     try {
+      console.log(`📨 Attempting to index email: ${email.subject}`);
       // AI categorization
-      const category = await categorizeEmail(email.content || '');
+      const emailContent = [email.text, email.html].filter(Boolean).join('\n');
+     // In your indexEmail function
+     const category = await categorizeEmail(emailContent);
+  
   
       const response = await esClient.index({
         index: 'emails',

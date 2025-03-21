@@ -45,6 +45,10 @@ async function fetchEmails(connection, account) {
     for (const msg of messages) {
       try {
         const parsed = await parseEmail(msg);
+        if (!parsed || !parsed.subject) {
+          console.warn('⚠️ Skipping email with no subject');
+          continue;
+        }
         await indexEmail({
           ...parsed,
           folder: 'INBOX',
@@ -59,21 +63,30 @@ async function fetchEmails(connection, account) {
   }
 }
 
+
 async function parseEmail(email) {
   try {
-    const parsed = await simpleParser(email.parts.find(p => p.which === 'TEXT').body);
+    const rawBody = email.parts.find(p => p.which === 'TEXT')?.body || '';
+
+    if (!rawBody) {
+      console.warn('⚠️ Email has no text content, skipping...');
+      return null; // ✅ Return null to handle it in fetchEmails()
+    }
+
+    const parsed = await simpleParser(rawBody);
+
     return {
-      messageId: parsed.messageId,
-      subject: parsed.subject,
-      from: parsed.from?.value[0]?.address,
-      to: parsed.to?.value[0]?.address,
-      date: parsed.date?.toISOString(),
-      text: parsed.text,
-      html: parsed.html
+      messageId: parsed.messageId || '',
+      subject: parsed.subject || 'No Subject',
+      from: parsed.from?.value?.[0]?.address || 'Unknown',
+      to: parsed.to?.value?.[0]?.address || 'Unknown',
+      date: parsed.date?.toISOString() || new Date().toISOString(),
+      text: parsed.text || '',
+      html: parsed.html || '',
     };
   } catch (error) {
     console.error('📧 Parsing failed:', error.message);
-    return {};
+    return null; // ✅ Return null to avoid crashing fetchEmails()
   }
 }
 // Start IMAP listeners
