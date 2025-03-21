@@ -21,10 +21,6 @@ export async function syncEmails() {
 
 const hf = new HfInference(process.env.HF_TOKEN);
 
-import { InferenceClient } from '@huggingface/inference';
-
-const hf = new InferenceClient({ model: 'facebook/bart-large-mnli' });
-
 
 const CATEGORIES = [
   'Interested',
@@ -33,17 +29,18 @@ const CATEGORIES = [
   'Spam',
   'Out of Office'
 ];
+
 export async function categorizeEmail(content) {
   try {
+    console.log('🤖 Categorizing Email:', typeof content);
     if (!content || content.trim() === '') {
-      console.warn('⚠️ Empty email content, using fallback categorization.');
-      return fallbackCategorization(content);
+      console.warn('⚠️ Empty email content, skipping categorization.');
+      return 'Uncategorized';
     }
 
-    const text = content.slice(0, 2000); // Limit content to 2000 chars
-
-    // console.log(`🤖 AI Categorization Input:\n${text}`);
-
+    // Limit content to 2000 chars to stay within API limits
+    const text = content.slice(0, 2000);
+    
     const response = await hf.zeroShotClassification({
       model: 'facebook/bart-large-mnli',
       inputs: text,
@@ -52,52 +49,28 @@ export async function categorizeEmail(content) {
         multi_label: false
       }
     });
+    console.log('🤖 AI Categorization:', response);
 
-    // console.log(`🤖 AI Categorization Response:\n`, response);
-
-    // ✅ Ensure response is valid before accessing properties
-    if (!response || !response.labels || !response.scores || response.labels.length === 0) {
-      console.warn('⚠️ AI response is invalid, using fallback categorization.');
-      return fallbackCategorization(content);
+    // ✅ Check if response is valid before calling reduce()
+    if (!response || !response.labels || !response.scores) {
+      console.warn('⚠️ AI response is invalid, returning Uncategorized.');
+      return 'Uncategorized';
     }
 
-    // ✅ Select the best-scoring category
-    const bestIndex = response.scores.indexOf(Math.max(...response.scores));
-    const bestMatch = response.labels[bestIndex];
-    const bestScore = response.scores[bestIndex];
+    // ✅ Safely get the best category with confidence threshold
+    const bestMatch = response.labels.reduce((best, label, index) => {
+      const score = response.scores[index] || 0;
+      return score > best.score ? { label, score } : best;
+    }, { label: 'Uncategorized', score: 0 });
 
-    // console.log(`🏆 Best AI Category: ${bestMatch} (Score: ${bestScore})`);
-
-    // ✅ Ensure a minimum confidence threshold
-    return bestScore > 0.2 ? bestMatch : fallbackCategorization(content);
-
+    return bestMatch.score > 0.6 ? bestMatch.label : 'Uncategorized';
+    
   } catch (error) {
     console.error('❌ AI Categorization Error:', error.message);
-    return fallbackCategorization(content);
+    return 'Uncategorized';
   }
 }
 
-function fallbackCategorization(content = '') {
-  const lowerContent = content.toLowerCase();
-
-  if (lowerContent.includes('meeting') || lowerContent.includes('schedule') || lowerContent.includes('call')) {
-    return 'Meeting Booked';
-  }
-  if (lowerContent.includes('not interested') || lowerContent.includes('unsubscribe')) {
-    return 'Not Interested';
-  }
-  if (lowerContent.includes('spam') || lowerContent.includes('advertisement')) {
-    return 'Spam';
-  }
-  if (lowerContent.includes('out of office') || lowerContent.includes('vacation') || lowerContent.includes('OOO')) {
-    return 'Out of Office';
-  }
-  if (lowerContent.includes('job') || lowerContent.includes('offer') || lowerContent.includes('opportunity')) {
-    return 'Interested';
-  }
-
-  return 'Uncategorized';
-}
 
 import axios from 'axios';
 

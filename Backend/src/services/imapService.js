@@ -71,7 +71,7 @@ async function parseEmail(email) {
   try {
 
     const parsed = email?.parts[1]?.body ?? undefined;
-    const text = email?.parts[0] ?? undefined;
+    const text = email?.parts[0].text ?? undefined;
 
     const subject = parsed.subject || "No Subject";
     const from = parsed.from || "Unknown";
@@ -93,7 +93,7 @@ async function parseEmail(email) {
       to,
       date ,
       text: text || parsed.html || "No Content Available",
-      html: parsed.html || "",
+      html: text ||"",
     };
   } catch (error) {
     console.error("📧 Parsing failed:", error.message);

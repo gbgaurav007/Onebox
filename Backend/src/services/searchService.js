@@ -25,12 +25,6 @@ export async function createEmailIndex() {
         await esClient.indices.create({
           index: 'emails',
           body: {
-            settings: {
-              index: {
-                number_of_shards: 1,
-                number_of_replicas: 1,
-              },
-            },
             mappings: {
               properties: {
                 subject: { type: 'text' },
@@ -63,11 +57,14 @@ export async function createEmailIndex() {
 // Store an email in Elasticsearch
 export async function indexEmail(email) {
     try {
-      console.log(`📨 Attempting to index email: ${email.subject}`);
+      console.log(`📨 Attempting to Object email: ${Object.keys(email)}`);
       // AI categorization
-      const emailContent = [email.text, email.html].filter(Boolean).join('\n');
+      const emailContent = [email.subject, email.text, email.html].filter(Boolean).join('\n');
+      console.log(`🤖 Categorizing email content: ${emailContent}`);
      // In your indexEmail function
-     const category = await categorizeEmail(emailContent);
+     const category = await categorizeEmail(email);
+     console.log(`🤖 AI Category: ${category}`);
+
   
   
       const response = await esClient.index({
