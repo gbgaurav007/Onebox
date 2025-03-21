@@ -14,13 +14,17 @@ export async function syncEmails() {
   const fetchOptions = { bodies: ['HEADER', 'TEXT'], struct: true };
 
   const emails = await connection.search(searchCriteria, fetchOptions);
-  // console.log('Fetched emails:', emails.length);
 
   return emails;
 }
 
 
 const hf = new HfInference(process.env.HF_TOKEN);
+
+import { InferenceClient } from '@huggingface/inference';
+
+const hf = new InferenceClient({ model: 'facebook/bart-large-mnli' });
+
 
 const CATEGORIES = [
   'Interested',

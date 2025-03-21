@@ -36,7 +36,7 @@ export async function createEmailIndex() {
                 subject: { type: 'text' },
                 from: { type: 'keyword' },
                 to: { type: 'keyword' },
-                date: { type: 'date' },
+                date: { type: 'text' },
                 content: { type: 'text' },
                 text: { type: 'text' },
                 html: { type: 'text' },
