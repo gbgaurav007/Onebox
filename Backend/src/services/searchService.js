@@ -1,15 +1,15 @@
 import { Client } from '@elastic/elasticsearch';
-import { categorizeEmail } from './emailService.js';
+import { categorizeEmail,sendSlackNotification ,triggerWebhook } from './emailService.js';
 import dotenv from 'dotenv';
 
+
 const esClient = new Client({
-  node: process.env.ELASTICSEARCH_URL || 'http://127.0.0.1:9200',
+  node: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
   auth: {
-    username: 'elastic',
-    password: 'changeme' // Only if you enabled security
+    apiKey: process.env.ELASTICSEARCH_API,
   },
   tls: {
-    rejectUnauthorized: false // For development only
+    rejectUnauthorized: false
   }
 });
 
@@ -83,6 +83,21 @@ export async function indexEmail(email) {
       });
   
       console.log(`📨 Indexed Email: ${email.subject} (Category: ${category})`, response);
+
+      if (category === "Meeting Booked") {
+
+          await sendSlackNotification({
+            from: email.from || "Unknown",
+            subject: email.subject || "No Subject",
+            text: email.text || email.html || "No Content Available",
+          });
+    
+          await triggerWebhook({
+            from: email.from || "Unknown",
+            subject: email.subject || "No Subject",
+            text: email.text || email.html || "No Content Available",
+          });
+      }
     } catch (error) {
       console.error('❌ Error indexing email:', error);
     }
