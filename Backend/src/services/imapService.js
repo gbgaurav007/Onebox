@@ -1,56 +1,85 @@
 import Imap from 'imap-simple';
 import { imapAccounts } from '../config/imapConfig.js';
-import MailParser from 'mailparser';
+import { simpleParser } from 'mailparser';
+import { indexEmail } from '../services/searchService.js';
 
-const connections = {}; // Store active IMAP connections
 
-async function connectIMAP(account) {
+const connections = new Map();
+
+async function connectAccount(account) {
   try {
     const connection = await Imap.connect({ imap: account });
     await connection.openBox('INBOX');
-
-    console.log(`✅ Connected to IMAP: ${account.user}`);
-
-    // Handle new incoming emails in real-time (IDLE mode)
-    connection.on('mail', async (numNewMsgs) => {
-      console.log(`📩 New Email(s) received (${numNewMsgs}) for ${account.user}`);
-      fetchLatestEmails(connection);
+    
+    console.log(`✅ Connected to: ${account.user}`);
+    connections.set(account.user, connection);
+    
+    // Initial sync
+    await fetchEmails(connection, account);
+    
+    // Real-time updates
+    connection.on('mail', async () => {
+      console.log(`📩 New emails detected`);
+      await fetchEmails(connection, account);
     });
-
-    connections[account.user] = connection;
+    
+    return true;
   } catch (error) {
-    console.error(`❌ IMAP connection failed for ${account.user}:`, error.message);
+    console.error(`❌ Connection failed for ${account.user}:`, error.message);
+    return false;
   }
 }
 
-// Fetch last 30 days emails
-async function fetchLatestEmails(connection) {
-  const searchCriteria = [['SINCE', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)]];
-  const fetchOptions = { bodies: ['HEADER', 'TEXT'], struct: true };
+async function fetchEmails(connection, account) {
+  try {
+    const searchCriteria = [['SINCE', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)]];
+    const fetchOptions = { 
+      bodies: ['HEADER', 'TEXT'],
+      markSeen: false,
+      struct: true
+    };
 
-  const emails = await connection.search(searchCriteria, fetchOptions);
+    const messages = await connection.search(searchCriteria, fetchOptions);
+    console.log(`📨 Processing ${messages.length} emails`);
 
-  for (const email of emails) {
-    const parsed = await parseEmail(email.body);
-    console.log(`📨 Processed Email: ${parsed.subject}`);
+    for (const msg of messages) {
+      try {
+        const parsed = await parseEmail(msg);
+        await indexEmail({
+          ...parsed,
+          folder: 'INBOX',
+          account: account.user
+        });
+      } catch (error) {
+        console.error('❌ Failed to process email:', error.message);
+      }
+    }
+  } catch (error) {
+    console.error('📭 Fetch failed:', error.message);
   }
 }
 
-// Parse email content
 async function parseEmail(email) {
-  const parser = new MailParser.MailParser();
-  parser.write(email.parts.find((part) => part.which === 'TEXT')?.body || '');
-  parser.end();
-
-  return new Promise((resolve) => {
-    parser.on('end', (mail) => resolve(mail));
-  });
+  try {
+    const parsed = await simpleParser(email.parts.find(p => p.which === 'TEXT').body);
+    return {
+      messageId: parsed.messageId,
+      subject: parsed.subject,
+      from: parsed.from?.value[0]?.address,
+      to: parsed.to?.value[0]?.address,
+      date: parsed.date?.toISOString(),
+      text: parsed.text,
+      html: parsed.html
+    };
+  } catch (error) {
+    console.error('📧 Parsing failed:', error.message);
+    return {};
+  }
 }
-
 // Start IMAP listeners
 async function startIMAPSync() {
   for (const account of imapAccounts) {
-    await connectIMAP(account);
+    await connectAccount(account);
   }
 }
 

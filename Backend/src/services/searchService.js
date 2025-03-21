@@ -1,4 +1,5 @@
 import { Client } from '@elastic/elasticsearch';
+import { categorizeEmail } from './emailService.js';
 import dotenv from 'dotenv';
 
 const esClient = new Client({
@@ -12,7 +13,6 @@ const esClient = new Client({
   }
 });
 
-let bulkQueue = []; // For batch indexing
 
 export async function createEmailIndex() {
     try {
@@ -20,7 +20,7 @@ export async function createEmailIndex() {
   
       const exists = await esClient.indices.exists({ index: 'emails' });
 
-      if (!exists.body) {
+      if (!exists) {
         console.log('🔄 Creating Elasticsearch email index...');
         await esClient.indices.create({
           index: 'emails',
@@ -53,29 +53,51 @@ export async function createEmailIndex() {
       console.error('❌ Elasticsearch index creation error:', error.meta?.body?.error?.reason || error);
     }
   }
+
 // Store an email in Elasticsearch
 export async function indexEmail(email) {
-  try {
-    const response = await esClient.index({
-      index: 'emails',
-      body: email, // ✅ Corrected
-    });
-
-    console.log(`📨 Indexed Email: ${email.subject}`, response);
-  } catch (error) {
-    console.error('❌ Error indexing email:', error);
+    try {
+      // AI categorization
+      const category = await categorizeEmail(email.content || '');
+  
+      const response = await esClient.index({
+        index: 'emails',
+        body: {
+          subject: email.subject,
+          from: email.from,
+          to: email.to,
+          date: email.date,
+          content: email.content,
+          category: category, // ✅ Store AI category
+        },
+      });
+  
+      console.log(`📨 Indexed Email: ${email.subject} (Category: ${category})`, response);
+    } catch (error) {
+      console.error('❌ Error indexing email:', error);
+    }
   }
-}
 
 // Search emails in Elasticsearch
-export async function searchEmails(query) {
+export async function searchEmails(query, category) {
   try {
+    const searchQuery = {
+      bool: {
+        must: [],
+      },
+    };
+
+    if (query) {
+      searchQuery.bool.must.push({ match: { content: query } });
+    }
+    if (category) {
+      searchQuery.bool.must.push({ match: { category } });
+    }
+
     const result = await esClient.search({
       index: 'emails',
       body: {
-        query: {
-          match: { content: query },
-        },
+        query: searchQuery,
       },
     });
 
@@ -85,3 +107,5 @@ export async function searchEmails(query) {
     return [];
   }
 }
+
+

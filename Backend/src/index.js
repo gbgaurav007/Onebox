@@ -1,9 +1,8 @@
-import dotenv from 'dotenv';
 import express from 'express';
 import emailRoutes from './routes/emailRoutes.js';
-import searchRoutes from './routes/searchRoutes.js';
 import { startIMAPSync } from './services/imapService.js';
 import { createEmailIndex } from './services/searchService.js';
+import dotenv from 'dotenv';
 
 dotenv.config();
 const app = express();
@@ -13,11 +12,26 @@ app.use(express.json());
 
 // Routes
 app.use('/api/emails', emailRoutes);
-app.use('/api/search', searchRoutes);
-
-// Start IMAP sync & create Elasticsearch index
-createEmailIndex();
-startIMAPSync();
 
 const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+// Update the startup sequence
+async function initializeApp() {
+    try {
+      // First create index
+      await createEmailIndex();
+      
+      // Then start IMAP sync
+      await startIMAPSync();
+      
+      // Finally start server
+      app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    } catch (error) {
+      console.error('❌ Startup failed:', error);
+      process.exit(1);
+    }
+  }
+  
+  initializeApp();
+
+// app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

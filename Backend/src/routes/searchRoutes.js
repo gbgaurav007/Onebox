@@ -3,18 +3,32 @@ import { searchEmails } from '../services/searchService.js';
 
 const router = express.Router();
 
-// API Endpoint: Search Emails
-router.get('/', async (req, res) => {
+router.get('/search', async (req, res) => {
   try {
-    const { query } = req.query;
-    if (!query) {
-      return res.status(400).json({ success: false, message: 'Query parameter is required' });
-    }
+    const results = await searchEmails({
+      query: req.query.q,
+      category: req.query.category,
+      folder: req.query.folder,
+      account: req.query.account
+    });
 
-    const results = await searchEmails(query);
-    res.json({ success: true, data: results });
+    res.json({
+      success: true,
+      count: results.length,
+      results: results.map(r => ({
+        id: r.id,
+        subject: r.subject,
+        from: r.from,
+        date: r.date,
+        snippet: r.text?.substring(0, 200) || ''
+      }))
+    });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Search error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message
+    });
   }
 });
 
